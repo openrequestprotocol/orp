@@ -9,6 +9,7 @@ struct WellKnownOrp {
     v: String,
     endpoint: String,
     #[serde(default)]
+    #[allow(dead_code)]
     policy_url: Option<String>,
 }
 
