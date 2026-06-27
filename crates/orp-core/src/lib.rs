@@ -9,6 +9,7 @@ pub mod policy;
 pub mod receipt;
 pub mod reputation;
 pub mod request;
+pub mod response;
 pub mod sign;
 pub mod validate;
 
@@ -22,7 +23,8 @@ pub use reputation::{FeedbackAction, ReputationStore, ReputationUpdate};
 pub use request::{
     Importance, Intent, Payload, Request, Stake, StakeKind, Transport, UnsignedRequest,
 };
-pub use sign::{KeyPair, PublicKeyBundle, SignatureBundle, verify_request};
+pub use response::{Response, ResponseStatus, UnsignedResponse};
+pub use sign::{KeyPair, PublicKeyBundle, SignatureBundle, verify_request, verify_response};
 pub use validate::{PolicyCheckResult, validate_against_policy};
 
 #[cfg(test)]

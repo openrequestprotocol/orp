@@ -1,0 +1,15 @@
+{
+  "v": "0.2",
+  "id": "resp_example001",
+  "ref": "req_example001",
+  "from": "bob@example.com",
+  "to": "alice@example.com",
+  "status": "done",
+  "reason": "Reviewed and approved",
+  "created_at": "2026-06-27T12:00:00Z",
+  "sig": {
+    "alg": "ed25519",
+    "key_id": "user-bob",
+    "value": "..."
+  }
+}

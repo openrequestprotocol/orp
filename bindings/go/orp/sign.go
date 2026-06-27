@@ -56,7 +56,7 @@ func (kp *KeyPair) PublicBundle() PublicKeyBundle {
 
 // SignRequest signs an unsigned request body.
 func (kp *KeyPair) SignRequest(unsigned *UnsignedRequest) (*Request, error) {
-	payload, err := SigningPayload(unsigned)
+	payload, err := signingPayloadValue(unsigned)
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +64,25 @@ func (kp *KeyPair) SignRequest(unsigned *UnsignedRequest) (*Request, error) {
 	signed := *unsigned
 	out := &Request{
 		UnsignedRequest: signed,
+		Sig: SignatureBundle{
+			Alg:   "ed25519",
+			KeyID: kp.KeyID,
+			Value: base64URLEncode(sig),
+		},
+	}
+	return out, nil
+}
+
+// SignResponse signs an unsigned response body.
+func (kp *KeyPair) SignResponse(unsigned *UnsignedResponse) (*Response, error) {
+	payload, err := signingPayloadValue(unsigned)
+	if err != nil {
+		return nil, err
+	}
+	sig := ed25519.Sign(kp.PrivateKey, payload)
+	signed := *unsigned
+	out := &Response{
+		UnsignedResponse: signed,
 		Sig: SignatureBundle{
 			Alg:   "ed25519",
 			KeyID: kp.KeyID,
@@ -102,7 +121,46 @@ func VerifyRequest(req *Request, keys []PublicKeyBundle) error {
 	if err != nil {
 		return fmt.Errorf("bad signature: %w", err)
 	}
-	payload, err := SigningPayload(&req.UnsignedRequest)
+	payload, err := signingPayloadValue(&req.UnsignedRequest)
+	if err != nil {
+		return err
+	}
+	if !ed25519.Verify(ed25519.PublicKey(pubBytes), payload, sigBytes) {
+		return fmt.Errorf("bad signature")
+	}
+	return nil
+}
+
+// VerifyResponse checks the response signature against the provided public keys.
+func VerifyResponse(resp *Response, keys []PublicKeyBundle) error {
+	if resp == nil {
+		return fmt.Errorf("nil response")
+	}
+	var key *PublicKeyBundle
+	for i := range keys {
+		if keys[i].KeyID == resp.Sig.KeyID {
+			key = &keys[i]
+			break
+		}
+	}
+	if key == nil {
+		return fmt.Errorf("unknown key_id %q", resp.Sig.KeyID)
+	}
+	if key.Alg != "ed25519" || resp.Sig.Alg != "ed25519" {
+		return fmt.Errorf("unsupported signature algorithm")
+	}
+	pubBytes, err := base64URLDecode(key.Value)
+	if err != nil {
+		return fmt.Errorf("bad public key: %w", err)
+	}
+	if len(pubBytes) != ed25519.PublicKeySize {
+		return fmt.Errorf("invalid public key length")
+	}
+	sigBytes, err := base64URLDecode(resp.Sig.Value)
+	if err != nil {
+		return fmt.Errorf("bad signature: %w", err)
+	}
+	payload, err := signingPayloadValue(&resp.UnsignedResponse)
 	if err != nil {
 		return err
 	}
@@ -127,7 +185,11 @@ func CanonicalBytes(v any) ([]byte, error) {
 
 // SigningPayload builds canonical bytes for signing (request object without sig).
 func SigningPayload(unsigned *UnsignedRequest) ([]byte, error) {
-	raw, err := json.Marshal(unsigned)
+	return signingPayloadValue(unsigned)
+}
+
+func signingPayloadValue(v any) ([]byte, error) {
+	raw, err := json.Marshal(v)
 	if err != nil {
 		return nil, err
 	}

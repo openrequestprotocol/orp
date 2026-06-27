@@ -87,6 +87,21 @@ pub async fn migrate(pool: &PgPool) -> Result<(), sqlx::Error> {
             public_key TEXT NOT NULL,
             created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         );
+
+        CREATE TABLE IF NOT EXISTS orp_responses (
+            id TEXT PRIMARY KEY,
+            request_id TEXT NOT NULL REFERENCES orp_requests(id) ON DELETE CASCADE,
+            sender TEXT NOT NULL,
+            responder TEXT NOT NULL,
+            status TEXT NOT NULL,
+            reason TEXT,
+            result_json JSONB,
+            response_json JSONB NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_orp_responses_sender_created
+            ON orp_responses (sender, created_at DESC);
         "#,
     )
     .execute(pool)

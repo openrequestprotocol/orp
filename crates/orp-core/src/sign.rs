@@ -8,6 +8,7 @@ use serde_json::Value;
 use crate::canonical::signing_payload;
 use crate::error::OrpError;
 use crate::request::{Request, UnsignedRequest};
+use crate::response::{Response, UnsignedResponse};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignatureBundle {
@@ -70,6 +71,19 @@ impl KeyPair {
         };
         Ok(Request::new(req.clone(), bundle))
     }
+
+    pub fn sign_response(&self, resp: &UnsignedResponse) -> Result<Response, OrpError> {
+        let value =
+            serde_json::to_value(resp).map_err(|e| OrpError::Serialization(e.to_string()))?;
+        let payload = signing_payload(&value)?;
+        let sig = self.signing_key.sign(&payload);
+        let bundle = SignatureBundle {
+            alg: "ed25519".into(),
+            key_id: self.key_id.clone(),
+            value: URL_SAFE_NO_PAD.encode(sig.to_bytes()),
+        };
+        Ok(Response::new(resp.clone(), bundle))
+    }
 }
 
 pub fn verify_request(req: &Request, keys: &[PublicKeyBundle]) -> Result<(), OrpError> {
@@ -99,6 +113,44 @@ pub fn verify_request(req: &Request, keys: &[PublicKeyBundle]) -> Result<(), Orp
     let payload = signing_payload(&value)?;
     let sig_bytes = URL_SAFE_NO_PAD
         .decode(&req.sig.value)
+        .map_err(|_| OrpError::BadSignature)?;
+    let sig_array: [u8; 64] = sig_bytes
+        .try_into()
+        .map_err(|_| OrpError::BadSignature)?;
+    let signature = Signature::from_bytes(&sig_array);
+
+    verifying_key
+        .verify(&payload, &signature)
+        .map_err(|_| OrpError::BadSignature)
+}
+
+pub fn verify_response(resp: &Response, keys: &[PublicKeyBundle]) -> Result<(), OrpError> {
+    let key = keys
+        .iter()
+        .find(|k| k.key_id == resp.sig.key_id)
+        .ok_or_else(|| OrpError::UnknownKey(resp.sig.key_id.clone()))?;
+
+    if key.alg != "ed25519" || resp.sig.alg != "ed25519" {
+        return Err(OrpError::BadSignature);
+    }
+
+    let pk_bytes = URL_SAFE_NO_PAD
+        .decode(&key.value)
+        .map_err(|_| OrpError::BadSignature)?;
+    let pk_array: [u8; 32] = pk_bytes
+        .try_into()
+        .map_err(|_| OrpError::BadSignature)?;
+    let verifying_key =
+        VerifyingKey::from_bytes(&pk_array).map_err(|_| OrpError::BadSignature)?;
+
+    let mut value =
+        serde_json::to_value(&resp.body).map_err(|e| OrpError::Serialization(e.to_string()))?;
+    if let Value::Object(ref mut map) = value {
+        map.remove("sig");
+    }
+    let payload = signing_payload(&value)?;
+    let sig_bytes = URL_SAFE_NO_PAD
+        .decode(&resp.sig.value)
         .map_err(|_| OrpError::BadSignature)?;
     let sig_array: [u8; 64] = sig_bytes
         .try_into()

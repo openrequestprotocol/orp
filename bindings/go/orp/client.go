@@ -293,6 +293,57 @@ func (c *Client) ListRequests(ctx context.Context, recipient, state string) ([]R
 	return rows, nil
 }
 
+func (c *Client) SubmitResponse(ctx context.Context, requestID string, response *Response) (map[string]any, error) {
+	u := fmt.Sprintf("%s/v1/requests/%s/respond", c.Endpoint, url.PathEscape(requestID))
+	payload := map[string]any{"response": response}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	c.setAuth(httpReq)
+	resp, err := c.HTTPClient.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var out map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= 300 {
+		return out, fmt.Errorf("respond: %s", resp.Status)
+	}
+	return out, nil
+}
+
+func (c *Client) ListResponses(ctx context.Context, sender string) ([]ResponseRow, error) {
+	u := fmt.Sprintf("%s/v1/responses?sender=%s", c.Endpoint, url.QueryEscape(sender))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.setAuth(req)
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("list responses: %s: %s", resp.Status, body)
+	}
+	var rows []ResponseRow
+	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
 // DomainFromEmail extracts the domain part of an email address.
 func DomainFromEmail(email string) string {
 	parts := strings.Split(email, "@")

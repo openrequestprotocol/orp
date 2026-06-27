@@ -6,7 +6,7 @@ use axum::{
     Json, Router,
 };
 use orp_bridge::inference::{wrap_legacy_email, HeuristicInference};
-use orp_core::{DeliveryReceipt, FeedbackAction, Policy, PublicKeyBundle, Request, ReputationStore, Transport};
+use orp_core::{DeliveryReceipt, FeedbackAction, Policy, PublicKeyBundle, Request, ReputationStore, Response, ResponseStatus, Transport};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tower_http::cors::{Any, CorsLayer};
@@ -24,6 +24,8 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/request", post(ingest_request))
         .route("/v1/requests", get(list_requests))
         .route("/v1/requests/{id}/feedback", post(submit_feedback))
+        .route("/v1/requests/{id}/respond", post(submit_response))
+        .route("/v1/responses", get(list_responses))
         .route("/v1/bridge/email", post(bridge_email))
         .route("/v1/keys", post(register_key))
         .route("/health", get(|| async { "ok" }))
@@ -235,6 +237,165 @@ async fn submit_feedback(
             "effective_importance": update.effective_importance.as_str()
         }
     })))
+}
+
+#[derive(Deserialize)]
+struct RespondBody {
+    response: Response,
+}
+
+async fn submit_response(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Json(body): Json<RespondBody>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    check_secret(&state, &headers).map_err(|(s, m)| ApiError { status: s, message: m })?;
+
+    if body.response.ref_id() != id {
+        return Err(ApiError::bad_request("response.ref must match request id"));
+    }
+
+    let row: Option<(serde_json::Value, String, String)> = sqlx::query_as(
+        "SELECT request_json, sender, recipient FROM orp_requests WHERE id = $1",
+    )
+    .bind(&id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|e| ApiError::internal(e.to_string()))?;
+
+    let (req_json, sender, recipient) =
+        row.ok_or_else(|| ApiError::not_found("request not found"))?;
+    let req: Request =
+        serde_json::from_value(req_json).map_err(|e| ApiError::internal(e.to_string()))?;
+
+    if body.response.to_addr() != sender {
+        return Err(ApiError::bad_request("response.to must match request sender"));
+    }
+    if body.response.from_addr() != recipient {
+        return Err(ApiError::bad_request(
+            "response.from must match request recipient",
+        ));
+    }
+
+    let keys = crate::keys::resolve_verify_keys(
+        &state.pool,
+        &state.server_public_keys(),
+        &recipient,
+        &body.response.sig.key_id,
+    )
+    .await
+    .map_err(|e| ApiError::bad_request(e.to_string()))?;
+    orp_core::verify_response(&body.response, &keys)
+        .map_err(|e| ApiError::bad_request(e.to_string()))?;
+
+    let (new_state, feedback_action) = match body.response.body.status {
+        ResponseStatus::Done => ("done", FeedbackAction::Done),
+        ResponseStatus::Accepted => ("waiting_on", FeedbackAction::WaitingOn),
+        ResponseStatus::NeedsInfo => ("waiting_on", FeedbackAction::Later),
+        ResponseStatus::Declined => ("ignored", FeedbackAction::Ignored),
+    };
+
+    sqlx::query("UPDATE orp_requests SET state = $1, updated_at = now() WHERE id = $2")
+        .bind(new_state)
+        .bind(&id)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+
+    let result_json = body
+        .response
+        .body
+        .result
+        .as_ref()
+        .map(serde_json::to_value)
+        .transpose()
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+    let response_json = serde_json::to_value(&body.response)
+        .map_err(|e| ApiError::internal(e.to_string()))?;
+
+    sqlx::query(
+        r#"INSERT INTO orp_responses (id, request_id, sender, responder, status, reason, result_json, response_json)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (id) DO NOTHING"#,
+    )
+    .bind(body.response.id())
+    .bind(&id)
+    .bind(&sender)
+    .bind(&recipient)
+    .bind(body.response.body.status.as_str())
+    .bind(&body.response.body.reason)
+    .bind(&result_json)
+    .bind(&response_json)
+    .execute(&state.pool)
+    .await
+    .map_err(|e| ApiError::internal(e.to_string()))?;
+
+    let update = {
+        let mut reps = state.reputation.write().await;
+        let store = reps
+            .entry(recipient.clone())
+            .or_insert_with(ReputationStore::new);
+        store.apply_feedback(&sender, req.body.importance, feedback_action)
+    };
+
+    Ok(Json(json!({
+        "status": "ok",
+        "response_id": body.response.id(),
+        "request_state": new_state,
+        "reputation": {
+            "sender": update.sender,
+            "score": update.new_score,
+            "effective_importance": update.effective_importance.as_str()
+        }
+    })))
+}
+
+#[derive(Deserialize)]
+struct ResponsesQuery {
+    sender: String,
+}
+
+#[derive(Serialize)]
+struct ResponseRow {
+    id: String,
+    request_id: String,
+    responder: String,
+    status: String,
+    response: Response,
+}
+
+async fn list_responses(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<ResponsesQuery>,
+) -> Result<Json<Vec<ResponseRow>>, ApiError> {
+    check_secret(&state, &headers).map_err(|(s, m)| ApiError { status: s, message: m })?;
+
+    let rows: Vec<(String, String, String, String, serde_json::Value)> = sqlx::query_as(
+        r#"SELECT id, request_id, responder, status, response_json
+           FROM orp_responses WHERE sender = $1
+           ORDER BY created_at DESC LIMIT 100"#,
+    )
+    .bind(&q.sender)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|e| ApiError::internal(e.to_string()))?;
+
+    let out = rows
+        .into_iter()
+        .filter_map(|(id, request_id, responder, status, json)| {
+            let response: Response = serde_json::from_value(json).ok()?;
+            Some(ResponseRow {
+                id,
+                request_id,
+                responder,
+                status,
+                response,
+            })
+        })
+        .collect();
+    Ok(Json(out))
 }
 
 #[derive(Deserialize)]

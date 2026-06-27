@@ -25,7 +25,21 @@
       "note": "Run `orp test-vectors` to verify signature against this vector"
     },
     {
-      "id": "delivery_receipt_accepted",
+      "id": "sign_verify_response",
+      "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "key_id": "test-key-1",
+      "unsigned": {
+        "v": "0.2",
+        "id": "resp_test001",
+        "ref": "req_test001",
+        "from": "bob@example.com",
+        "to": "alice@example.com",
+        "status": "done",
+        "created_at": "2026-06-01T12:00:00Z"
+      },
+      "note": "Run `orp test-vectors` to verify response signature against this vector"
+    },
+    {
       "response": {
         "status": "accepted",
         "id": "req_test001",

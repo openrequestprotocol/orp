@@ -128,3 +128,39 @@ type RegisterKeyBody struct {
 	Email string          `json:"email"`
 	Key   PublicKeyBundle `json:"key"`
 }
+
+// Response status values.
+const (
+	ResponseStatusAccepted  = "accepted"
+	ResponseStatusDeclined  = "declined"
+	ResponseStatusDone      = "done"
+	ResponseStatusNeedsInfo = "needs_info"
+)
+
+// UnsignedResponse is the signed payload (all fields except sig).
+type UnsignedResponse struct {
+	V         string          `json:"v"`
+	ID        string          `json:"id"`
+	Ref       string          `json:"ref"`
+	From      string          `json:"from"`
+	To        string          `json:"to"`
+	Status    string          `json:"status"`
+	Reason    *string         `json:"reason,omitempty"`
+	Result    *PayloadAction  `json:"result,omitempty"`
+	CreatedAt *string         `json:"created_at,omitempty"`
+}
+
+// Response is a signed answer to a request.
+type Response struct {
+	UnsignedResponse
+	Sig SignatureBundle `json:"sig"`
+}
+
+// ResponseRow is a stored response from the ORP server.
+type ResponseRow struct {
+	ID        string   `json:"id"`
+	RequestID string   `json:"request_id"`
+	Responder string   `json:"responder"`
+	Status    string   `json:"status"`
+	Response  Response `json:"response"`
+}

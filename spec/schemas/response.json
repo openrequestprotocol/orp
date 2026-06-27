@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openrequestprotocol.org/schemas/v0.2/response.json",
+  "title": "ORP Response",
+  "description": "A signed response to a request, returned to the originating sender",
+  "type": "object",
+  "required": ["v", "id", "ref", "from", "to", "status", "sig"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "type": "string", "enum": ["0.1", "0.2"] },
+    "id": { "type": "string", "pattern": "^resp_[a-zA-Z0-9_-]+$" },
+    "ref": { "type": "string", "pattern": "^req_[a-zA-Z0-9_-]+$", "description": "Request id being answered" },
+    "from": { "type": "string", "format": "email", "description": "Responder (recipient of the original request)" },
+    "to": { "type": "string", "format": "email", "description": "Original sender" },
+    "status": {
+      "type": "string",
+      "enum": ["accepted", "declined", "done", "needs_info"]
+    },
+    "reason": { "type": "string" },
+    "result": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string" },
+        "data": { "type": "object" }
+      }
+    },
+    "sig": { "$ref": "request.json#/$defs/signature" },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

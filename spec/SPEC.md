@@ -20,6 +20,20 @@ A signed, transport-agnostic object with:
 
 See [schemas/request.json](./schemas/request.json).
 
+### Response
+
+A signed answer to a request, returned to the originating sender so agents can close the loop:
+
+- `ref` — id of the request being answered
+- `from` — responder (recipient of the original request)
+- `to` — original sender
+- `status` — `accepted | declined | done | needs_info`
+- `reason` — optional human-readable explanation
+- `result` — optional typed outcome (mirrors `payload.action`)
+- `sig` — Ed25519 signature over canonical bytes (same rules as Request)
+
+See [schemas/response.json](./schemas/response.json).
+
 ### Recipient Policy
 
 Published by each recipient. Senders fetch at compose time to pre-validate.
@@ -103,6 +117,15 @@ Clients may send `Idempotency-Key` header; defaults to `request.id`. Dedup key i
 
 Feedback actions: `done`, `later`, `urgent_ok`, `spam`, `ignored`, `waiting_on`.
 
+Response status mapping (when using `POST /v1/requests/{id}/respond`):
+
+| Response status | Request state | Reputation action |
+|-----------------|---------------|-------------------|
+| `done` | `done` | `done` |
+| `accepted` | `waiting_on` | `waiting_on` |
+| `needs_info` | `waiting_on` | `later` |
+| `declined` | `ignored` | `ignored` |
+
 ## HTTP API (reference server)
 
 | Method | Path | Description |
@@ -113,7 +136,9 @@ Feedback actions: `done`, `later`, `urgent_ok`, `spam`, `ignored`, `waiting_on`.
 | POST | `/v1/deliver` | S2S request delivery → delivery receipt |
 | POST | `/v1/request` | Agent/client ingestion → delivery receipt |
 | GET | `/v1/requests` | List inbox (authenticated) |
-| POST | `/v1/requests/{id}/feedback` | Submit feedback |
+| POST | `/v1/requests/{id}/feedback` | Submit feedback (legacy; prefer respond) |
+| POST | `/v1/requests/{id}/respond` | Submit signed response → updates state + reputation |
+| GET | `/v1/responses` | List responses to requests you sent (`?sender=`) |
 | POST | `/v1/bridge/email` | Bridge legacy email → inferred request |
 | POST | `/v1/keys` | Register sender public key (authenticated) |
 
