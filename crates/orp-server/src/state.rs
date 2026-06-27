@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use orp_core::{
-    BudgetTracker, DiscoveryDocument, KeyPair, PublicKeyBundle, ReputationStore,
+    DiscoveryDocument, KeyPair, PublicKeyBundle, ReputationStore,
 };
 use sqlx::PgPool;
 use tokio::sync::RwLock;
@@ -15,7 +15,6 @@ pub struct AppState {
     pub config: ServerConfig,
     pub keypair: Arc<KeyPair>,
     pub discovery: Arc<DiscoveryDocument>,
-    pub budgets: Arc<RwLock<HashMap<String, BudgetTracker>>>,
     pub reputation: Arc<RwLock<HashMap<String, ReputationStore>>>,
 }
 
@@ -35,7 +34,6 @@ impl AppState {
             config,
             keypair: Arc::new(keypair),
             discovery: Arc::new(discovery),
-            budgets: Arc::new(RwLock::new(HashMap::new())),
             reputation: Arc::new(RwLock::new(HashMap::new())),
         }
     }

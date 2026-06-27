@@ -13,7 +13,7 @@ pub mod response;
 pub mod sign;
 pub mod validate;
 
-pub use budget::{BudgetState, BudgetTracker};
+pub use budget::{high_limit, SenderBudget, HIGH_WINDOW_DAYS, UNKNOWN_WINDOW_DAYS};
 pub use discovery::{DiscoveryDocument, domain_from_email};
 pub use error::OrpError;
 pub use limits::{LimitsPolicy, DEFAULT_MAX_PAYLOAD_BYTES, DEFAULT_MAX_SUMMARY_LEN};
@@ -77,14 +77,17 @@ mod integration_tests {
 
     #[test]
     fn budget_limits_high_importance() {
-        let mut tracker = BudgetTracker::new();
+        use chrono::Utc;
         let policy = Policy::default_for("bob@example.com");
-        tracker
-            .check_high_budget(&policy, "alice@example.com", Importance::High)
+        let limit = high_limit(&policy, "alice@example.com");
+        let mut budget = SenderBudget::fresh(Utc::now());
+
+        budget
+            .check_high(Importance::High, limit)
             .unwrap();
-        tracker.consume_high("alice@example.com", Importance::High);
-        let err = tracker
-            .check_high_budget(&policy, "alice@example.com", Importance::High)
+        budget.consume_high(Importance::High);
+        let err = budget
+            .check_high(Importance::High, limit)
             .unwrap_err();
         assert!(err.to_string().contains("budget"));
     }

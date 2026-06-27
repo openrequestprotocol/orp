@@ -32,9 +32,27 @@ pub async fn deliver_outbound(state: &AppState, req: &Request) -> Result<Deliver
         return ingest_inbound(state, req, Transport::Native, 1.0).await;
     }
 
-    warn!(recipient, "degrading to email bridge");
+    warn!(
+        recipient,
+        "no ORP endpoint; degrading to email bridge (SMTP transport not yet wired)"
+    );
+    // Build the RFC 5322 message now so a malformed request fails fast, then
+    // queue it for an out-of-band SMTP sender. Return `queued`, not `accepted`:
+    // nothing has actually been delivered to the recipient yet.
     let _email = degrade_to_email(req, None)?;
-    Ok(DeliveryReceipt::accepted(req.id()))
+    let queue_id = format!("dq_{}", uuid::Uuid::new_v4());
+    sqlx::query(
+        r#"INSERT INTO orp_delivery_queue (id, request_json, target_endpoint, last_error)
+           VALUES ($1, $2, $3, $4)"#,
+    )
+    .bind(&queue_id)
+    .bind(json!(req))
+    .bind(format!("mailto:{recipient}"))
+    .bind("email bridge: SMTP transport not configured")
+    .execute(&state.pool)
+    .await
+    .map_err(|e| OrpError::Serialization(e.to_string()))?;
+    Ok(DeliveryReceipt::queued(req.id()))
 }
 
 #[derive(Debug)]
@@ -113,16 +131,7 @@ pub async fn ingest_inbound(
         return Err(OrpError::PolicyViolation(reason));
     }
 
-    {
-        let mut budgets = state.budgets.write().await;
-        let tracker = budgets
-            .entry(recipient.to_string())
-            .or_insert_with(orp_core::BudgetTracker::new);
-        tracker.check_high_budget(&policy, sender, req.body.importance)?;
-        tracker.check_unknown_rate(&policy, sender, is_known)?;
-        tracker.consume_high(sender, req.body.importance);
-        tracker.consume_unknown(sender, is_known);
-    }
+    enforce_budget(state, recipient, sender, &policy, req.body.importance, is_known).await?;
 
     let effective_importance = {
         let mut reps = state.reputation.write().await;
@@ -205,6 +214,92 @@ pub async fn load_policy(state: &AppState, email: &str) -> Result<orp_core::Poli
         .map_err(|e| OrpError::Serialization(e.to_string()))?;
         Ok(policy)
     }
+}
+
+/// Enforce per-sender budgets against the persistent `orp_budget_state` row.
+///
+/// Loads (or creates) the sender's budget, rolls any elapsed windows, checks
+/// the limits, and — only if the request is admitted — consumes and persists
+/// the updated counts. The whole check-then-consume runs in a transaction with
+/// `FOR UPDATE` so concurrent deliveries cannot both slip past the same cap.
+async fn enforce_budget(
+    state: &AppState,
+    recipient: &str,
+    sender: &str,
+    policy: &orp_core::Policy,
+    importance: orp_core::Importance,
+    is_known: bool,
+) -> Result<(), OrpError> {
+    let now = Utc::now();
+
+    let mut tx = state
+        .pool
+        .begin()
+        .await
+        .map_err(|e| OrpError::Serialization(e.to_string()))?;
+
+    let row: Option<(i32, DateTime<Utc>, i32, DateTime<Utc>)> = sqlx::query_as(
+        r#"SELECT high_used, window_start, unknown_today, unknown_window_start
+           FROM orp_budget_state
+           WHERE recipient = $1 AND sender = $2
+           FOR UPDATE"#,
+    )
+    .bind(recipient)
+    .bind(sender)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|e| OrpError::Serialization(e.to_string()))?;
+
+    let mut budget = match row {
+        Some((high_used, high_window_start, unknown_used, unknown_window_start)) => {
+            orp_core::SenderBudget {
+                high_used: high_used.max(0) as u32,
+                high_window_start,
+                unknown_used: unknown_used.max(0) as u32,
+                unknown_window_start,
+            }
+        }
+        None => orp_core::SenderBudget::fresh(now),
+    };
+
+    budget.roll(now);
+
+    let enforce_unknown = !is_known && !policy.is_vip(sender);
+    budget.check_high(importance, orp_core::high_limit(policy, sender))?;
+    if enforce_unknown {
+        budget.check_unknown(policy.rate_limits.unknown_per_day)?;
+    }
+
+    budget.consume_high(importance);
+    if enforce_unknown {
+        budget.consume_unknown();
+    }
+
+    sqlx::query(
+        r#"INSERT INTO orp_budget_state
+               (recipient, sender, high_used, window_start, unknown_today, unknown_window_start)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (recipient, sender) DO UPDATE SET
+               high_used = excluded.high_used,
+               window_start = excluded.window_start,
+               unknown_today = excluded.unknown_today,
+               unknown_window_start = excluded.unknown_window_start"#,
+    )
+    .bind(recipient)
+    .bind(sender)
+    .bind(budget.high_used as i32)
+    .bind(budget.high_window_start)
+    .bind(budget.unknown_used as i32)
+    .bind(budget.unknown_window_start)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| OrpError::Serialization(e.to_string()))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| OrpError::Serialization(e.to_string()))?;
+
+    Ok(())
 }
 
 async fn is_known_sender(state: &AppState, recipient: &str, sender: &str) -> Result<bool, OrpError> {

@@ -67,8 +67,12 @@ pub async fn migrate(pool: &PgPool) -> Result<(), sqlx::Error> {
             high_used INT NOT NULL DEFAULT 0,
             unknown_today INT NOT NULL DEFAULT 0,
             window_start TIMESTAMPTZ NOT NULL DEFAULT now(),
+            unknown_window_start TIMESTAMPTZ NOT NULL DEFAULT now(),
             PRIMARY KEY (recipient, sender)
         );
+
+        ALTER TABLE orp_budget_state
+            ADD COLUMN IF NOT EXISTS unknown_window_start TIMESTAMPTZ NOT NULL DEFAULT now();
 
         CREATE TABLE IF NOT EXISTS orp_delivery_queue (
             id TEXT PRIMARY KEY,
