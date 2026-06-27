@@ -1,8 +1,6 @@
 # Open Request Protocol (ORP)
 
-An open, federated protocol for recipient-sovereign requests — a structured todo layer that rides on email today and graduates to native federated transport.
-
-**Users still say "email me."** ORP is the technical layer underneath.
+An open, federated protocol for recipient-sovereign requests, a structured todo layer that rides on email today and graduates to native federated transport.
 
 ## Thesis
 

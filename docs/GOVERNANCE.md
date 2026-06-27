@@ -6,8 +6,7 @@ The Open Request Protocol (ORP) is an open standard maintained by a neutral comm
 
 1. **Recipient sovereignty** — recipients define what may land on their list
 2. **Open specification** — anyone may implement; conformance suite proves compatibility
-3. **No single vendor** — Mooncake is the first client, not the protocol owner
-4. **Email compatibility** — the bridge ensures zero-friction adoption
+3. **Email compatibility** — the bridge ensures zero-friction adoption
 
 ## Decision process (v0.1)
 

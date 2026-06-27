@@ -10,6 +10,8 @@ use orp_core::{OrpError, Request};
 use serde_json;
 
 pub const ORP_HEADER: &str = "X-ORP-Request";
+pub const ORP_INFO_HEADER: &str = "X-ORP-Info";
+pub const ORP_INFO_URL: &str = "https://openrequestprotocol.org";
 pub const ORP_MIME_TYPE: &str = "application/orp+json";
 
 /// Embed a signed Request into email headers and MIME structure.
@@ -37,6 +39,7 @@ pub fn embed_in_email(req: &Request, subject: Option<&str>) -> Result<String, Or
         .to(req.to_addr())
         .subject(Text::from(subj.to_string()))
         .header(ORP_HEADER, Text::from(encoded))
+        .header(ORP_INFO_HEADER, Text::from(ORP_INFO_URL.to_string()))
         .body(alt)
         .write_to_string()
         .map_err(|e| OrpError::Serialization(e.to_string()))

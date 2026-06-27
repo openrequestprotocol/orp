@@ -73,7 +73,7 @@ When recipient does not speak ORP natively:
 
 1. Sender server degrades to RFC 5322 email built with a proper MIME library (not hand-rolled headers)
 2. Embeds canonical request in `X-ORP-Request` header (base64url) and `multipart/alternative` part `application/orp+json`
-3. Footer: "Sent via Open Request Protocol — claim your list at https://openrequestprotocol.org"
+3. Adds an optional `X-ORP-Info` header pointing to the spec URL for discovery. No human-visible footer is injected; the bridge MUST NOT modify the sender's visible message body for promotional purposes.
 
 When recipient receives legacy email:
 

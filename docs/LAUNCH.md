@@ -49,7 +49,7 @@ Publish DNS: `https://mail.example.com/.well-known/orp` → your ORP server endp
 Non-ORP recipients receive degraded email with:
 
 - Embedded `X-ORP-Request` header (upgrade path)
-- Footer: "Sent via Open Request Protocol — claim your list at https://openrequestprotocol.org"
+- Optional `X-ORP-Info` header pointing to the spec for discovery (no visible body footer)
 
 ## Next steps for third-party clients
 
