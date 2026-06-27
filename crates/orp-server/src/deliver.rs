@@ -32,14 +32,40 @@ pub async fn deliver_outbound(state: &AppState, req: &Request) -> Result<Deliver
         return ingest_inbound(state, req, Transport::Native, 1.0).await;
     }
 
-    warn!(
-        recipient,
-        "no ORP endpoint; degrading to email bridge (SMTP transport not yet wired)"
-    );
-    // Build the RFC 5322 message now so a malformed request fails fast, then
-    // queue it for an out-of-band SMTP sender. Return `queued`, not `accepted`:
-    // nothing has actually been delivered to the recipient yet.
-    let _email = degrade_to_email(req, None)?;
+    warn!(recipient, "no ORP endpoint; degrading to email bridge");
+    let email = degrade_to_email(req, None)?;
+
+    // If an SMTP transport is configured, actually deliver the degraded mail.
+    if let Some(smtp_url) = state.config.smtp_url.as_deref() {
+        match crate::smtp::send_raw_email(smtp_url, req.from_addr(), recipient, email.as_bytes())
+            .await
+        {
+            Ok(()) => {
+                info!(recipient, "bridged email delivered via SMTP");
+                return Ok(DeliveryReceipt::accepted(req.id()));
+            }
+            Err(e) => {
+                warn!(recipient, error = %e, "SMTP bridge send failed; queueing for retry");
+                enqueue_bridge(state, req, recipient, &e.to_string()).await?;
+                return Ok(DeliveryReceipt::queued(req.id()));
+            }
+        }
+    }
+
+    // No SMTP transport configured: queue (unsent) and be honest about it.
+    enqueue_bridge(state, req, recipient, "email bridge: SMTP transport not configured").await?;
+    Ok(DeliveryReceipt::queued(req.id()))
+}
+
+/// Persist a degraded request to the delivery queue for later (manual or
+/// out-of-band) SMTP delivery. Uses a `mailto:` pseudo-endpoint so the row is
+/// distinguishable from native S2S retries.
+async fn enqueue_bridge(
+    state: &AppState,
+    req: &Request,
+    recipient: &str,
+    reason: &str,
+) -> Result<(), OrpError> {
     let queue_id = format!("dq_{}", uuid::Uuid::new_v4());
     sqlx::query(
         r#"INSERT INTO orp_delivery_queue (id, request_json, target_endpoint, last_error)
@@ -48,11 +74,11 @@ pub async fn deliver_outbound(state: &AppState, req: &Request) -> Result<Deliver
     .bind(&queue_id)
     .bind(json!(req))
     .bind(format!("mailto:{recipient}"))
-    .bind("email bridge: SMTP transport not configured")
+    .bind(reason)
     .execute(&state.pool)
     .await
     .map_err(|e| OrpError::Serialization(e.to_string()))?;
-    Ok(DeliveryReceipt::queued(req.id()))
+    Ok(())
 }
 
 #[derive(Debug)]

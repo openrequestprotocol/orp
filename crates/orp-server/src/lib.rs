@@ -7,6 +7,7 @@ pub mod deliver;
 pub mod discovery;
 pub mod keys;
 pub mod routes;
+pub mod smtp;
 pub mod state;
 pub mod webhook;
 

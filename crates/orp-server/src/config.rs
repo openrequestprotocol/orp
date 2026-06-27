@@ -9,6 +9,9 @@ pub struct ServerConfig {
     pub signing_seed: Option<[u8; 32]>,
     pub shared_secret: Option<String>,
     pub webhook_url: Option<String>,
+    /// lettre SMTP URL for the email bridge, e.g. `smtp://host:1025`. When
+    /// unset, bridged mail is queued rather than sent.
+    pub smtp_url: Option<String>,
 }
 
 impl ServerConfig {
@@ -29,6 +32,7 @@ impl ServerConfig {
             signing_seed: None,
             shared_secret: std::env::var("ORP_SHARED_SECRET").ok().filter(|s| !s.is_empty()),
             webhook_url: std::env::var("ORP_WEBHOOK_URL").ok().filter(|s| !s.is_empty()),
+            smtp_url: std::env::var("ORP_SMTP_URL").ok().filter(|s| !s.is_empty()),
         }
     }
 }

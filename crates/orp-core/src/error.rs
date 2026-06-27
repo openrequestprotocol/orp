@@ -16,4 +16,6 @@ pub enum OrpError {
     Serialization(String),
     #[error("unknown key id: {0}")]
     UnknownKey(String),
+    #[error("transport error: {0}")]
+    Transport(String),
 }

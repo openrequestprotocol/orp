@@ -51,6 +51,11 @@ Non-ORP recipients receive degraded email with:
 - Embedded `X-ORP-Request` header (upgrade path)
 - Optional `X-ORP-Info` header pointing to the spec for discovery (no visible body footer)
 
+Set `ORP_SMTP_URL` (e.g. `smtp://host:1025` for dev, `smtp://user:pass@host:587`
+for STARTTLS, or `smtps://host:465`) to have the server actually deliver the
+degraded mail. When unset, bridged messages are queued in `orp_delivery_queue`
+rather than sent.
+
 ## Next steps for third-party clients
 
 1. Implement `orp-core` equivalents in your language
