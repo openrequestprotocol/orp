@@ -1,0 +1,28 @@
+{
+  "description": "ORP conformance test vectors v0.1",
+  "vectors": [
+    {
+      "id": "canonical_sort",
+      "input": {"b": 2, "a": 1},
+      "canonical": "{\"a\":1,\"b\":2}"
+    },
+    {
+      "id": "sign_verify_basic",
+      "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "key_id": "test-key-1",
+      "unsigned": {
+        "v": "0.1",
+        "id": "req_test001",
+        "from": "alice@example.com",
+        "to": "bob@example.com",
+        "intent": "reply",
+        "summary": "Review the deck",
+        "importance": "normal",
+        "payload": {"text": "Please review by Friday.", "subject": "Deck review"},
+        "stake": {"kind": "none"},
+        "created_at": "2026-06-01T12:00:00Z"
+      },
+      "note": "Run `orp test-vectors` to verify signature against this vector"
+    }
+  ]
+}

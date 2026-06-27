@@ -1,0 +1,22 @@
+{
+  "v": "0.2",
+  "id": "req_example001",
+  "from": "alice@example.com",
+  "to": "bob@example.com",
+  "intent": "reply",
+  "summary": "Review the deck",
+  "importance": "normal",
+  "payload": {
+    "text": "Please review by Friday.",
+    "subject": "Deck review"
+  },
+  "stake": {
+    "kind": "none"
+  },
+  "created_at": "2026-06-01T12:00:00Z",
+  "sig": {
+    "alg": "ed25519",
+    "key_id": "alice-key-1",
+    "value": "c2lnbmF0dXJl"
+  }
+}

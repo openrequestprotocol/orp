@@ -1,0 +1,30 @@
+[package]
+name = "orp-core"
+description = "Open Request Protocol core types, signing, and policy enforcement"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+ed25519-dalek = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+base64 = { workspace = true }
+rand = "0.8"
+
+[dev-dependencies]
+pretty_assertions = "1"
+
+[features]
+default = []
+wasm = []

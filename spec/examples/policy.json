@@ -1,0 +1,27 @@
+{
+  "v": "0.2",
+  "recipient": "bob@example.com",
+  "accepts": {
+    "intents": ["reply", "decide", "pay", "sign", "schedule", "read", "fyi"],
+    "require": ["summary"]
+  },
+  "senders": {
+    "vip_bypass": true,
+    "unknown": "stake_required",
+    "blocked": [],
+    "vip": ["alice@example.com"]
+  },
+  "budgets": {
+    "default_high_per_week": 1,
+    "per_sender_overrides": {
+      "alice@example.com": { "high_per_week": 3 }
+    }
+  },
+  "rate_limits": {
+    "unknown_per_day": 3
+  },
+  "limits": {
+    "max_payload_bytes": 262144,
+    "max_summary_len": 280
+  }
+}

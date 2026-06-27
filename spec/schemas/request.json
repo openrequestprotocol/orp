@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openrequestprotocol.org/schemas/v0.2/request.json",
+  "title": "ORP Request",
+  "description": "A declared, signed request landing on a recipient's list",
+  "type": "object",
+  "required": ["v", "id", "from", "to", "intent", "summary", "importance", "payload", "sig"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "type": "string", "enum": ["0.1", "0.2"] },
+    "id": { "type": "string", "pattern": "^req_[a-zA-Z0-9_-]+$" },
+    "from": { "type": "string", "format": "email" },
+    "to": { "type": "string", "format": "email" },
+    "intent": {
+      "type": "string",
+      "enum": ["read", "reply", "decide", "pay", "sign", "schedule", "do", "fyi"]
+    },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "importance": { "type": "string", "enum": ["low", "normal", "high"] },
+    "deadline": { "type": "string", "format": "date-time" },
+    "thread": { "type": "string" },
+    "payload": { "$ref": "#/$defs/payload" },
+    "stake": { "$ref": "#/$defs/stake" },
+    "sig": { "$ref": "#/$defs/signature" },
+    "transport": {
+      "type": "string",
+      "enum": ["native", "email_bridge", "inferred"],
+      "description": "How this request arrived; set by recipient server on ingestion"
+    },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "payload": {
+      "type": "object",
+      "required": ["text"],
+      "additionalProperties": false,
+      "properties": {
+        "text": { "type": "string" },
+        "html": { "type": "string" },
+        "subject": { "type": "string" },
+        "action": {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "type": "string", "enum": ["pay", "sign", "schedule", "link"] },
+            "data": { "type": "object" }
+          }
+        }
+      }
+    },
+    "stake": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "type": "string", "enum": ["none", "reputation", "escrow"] },
+        "receipt": { "type": "string" },
+        "amount_cents": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "required": ["alg", "key_id", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "alg": { "type": "string", "const": "ed25519" },
+        "key_id": { "type": "string" },
+        "value": { "type": "string", "description": "Base64url-encoded signature" }
+      }
+    }
+  }
+}

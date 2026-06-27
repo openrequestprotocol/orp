@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openrequestprotocol.org/schemas/v0.2/policy.json",
+  "title": "ORP Recipient Policy",
+  "description": "Machine-readable rules for what may land on a recipient's list",
+  "type": "object",
+  "required": ["v", "recipient", "accepts"],
+  "additionalProperties": false,
+  "properties": {
+    "v": { "type": "string", "const": "0.2" },
+    "recipient": { "type": "string", "format": "email" },
+    "accepts": {
+      "type": "object",
+      "required": ["intents"],
+      "properties": {
+        "intents": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["read", "reply", "decide", "pay", "sign", "schedule", "do", "fyi"]
+          },
+          "minItems": 1
+        },
+        "require": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["summary", "deadline", "stake"] }
+        }
+      }
+    },
+    "senders": {
+      "type": "object",
+      "properties": {
+        "vip_bypass": { "type": "boolean", "default": true },
+        "unknown": {
+          "type": "string",
+          "enum": ["reject", "stake_required", "allow"],
+          "default": "stake_required"
+        },
+        "blocked": { "type": "array", "items": { "type": "string", "format": "email" } },
+        "vip": { "type": "array", "items": { "type": "string", "format": "email" } }
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "properties": {
+        "default_high_per_week": { "type": "integer", "minimum": 0, "default": 1 },
+        "per_sender_overrides": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "high_per_week": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    "rate_limits": {
+      "type": "object",
+      "properties": {
+        "unknown_per_day": { "type": "integer", "minimum": 0, "default": 3 }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "max_payload_bytes": { "type": "integer", "minimum": 1024, "default": 262144 },
+        "max_summary_len": { "type": "integer", "minimum": 32, "default": 280 }
+      }
+    }
+  }
+}

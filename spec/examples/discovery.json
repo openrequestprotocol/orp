@@ -1,0 +1,16 @@
+{
+  "v": "0.2",
+  "endpoint": "https://orp.example.com",
+  "public_keys": [
+    {
+      "key_id": "server-key-1",
+      "alg": "ed25519",
+      "value": "dGVzdC1wdWJsaWMta2V5LWJ5dGVzLTMyLWNoYXJzLWxlbmd0aA"
+    }
+  ],
+  "policy_url": "https://orp.example.com/v1/policy/{email}",
+  "limits": {
+    "max_payload_bytes": 262144,
+    "max_summary_len": 280
+  }
+}

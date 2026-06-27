@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: orp
+          POSTGRES_PASSWORD: orp
+          POSTGRES_DB: orp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://orp:orp@localhost:5432/orp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace -- -D warnings
+      - run: cargo test --workspace
+      - run: bash conformance/run.sh
+
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - run: cd bindings/go && go test -v ./...
+
+  schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install jsonschema
+      - run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import jsonschema
+
+          root = Path("spec")
+          for name in ("request", "policy", "discovery"):
+              schema = json.loads((root / "schemas" / f"{name}.json").read_text())
+              example = root / "examples" / f"{name}.json"
+              if example.exists():
+                  data = json.loads(example.read_text())
+                  jsonschema.validate(data, schema)
+                  print(f"OK {example}")
+          PY

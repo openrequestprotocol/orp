@@ -1,0 +1,24 @@
+[package]
+name = "orp-cli"
+description = "CLI for Open Request Protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "orp"
+path = "src/main.rs"
+
+[dependencies]
+orp-core = { workspace = true }
+orp-bridge = { workspace = true }
+orp-server = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+reqwest = { workspace = true }
